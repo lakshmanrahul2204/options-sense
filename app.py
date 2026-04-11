@@ -1,0 +1,577 @@
+import streamlit as st
+import pyotp
+import pandas as pd
+import numpy as np
+from growwapi import GrowwAPI
+import traceback
+from datetime import date, timedelta
+
+# ─── Page Config ─────────────────────────────────────────────────────────────
+st.set_page_config(
+    page_title="OptionsSense | Fair Value Calculator",
+    page_icon="📊",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
+
+# ─── Custom CSS ──────────────────────────────────────────────────────────────
+st.markdown("""
+<style>
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Syne:wght@400;600;800&display=swap');
+
+html, body, [class*="css"] {
+    font-family: 'Syne', sans-serif;
+}
+
+.stApp {
+    background: #0a0e1a;
+    color: #e8eaf6;
+}
+
+/* Sidebar */
+[data-testid="stSidebar"] {
+    background: #0d1224 !important;
+    border-right: 1px solid #1e2a4a;
+}
+
+/* Top brand bar */
+.brand-bar {
+    background: linear-gradient(135deg, #1a237e 0%, #0d1224 100%);
+    border: 1px solid #283593;
+    border-radius: 12px;
+    padding: 1.2rem 1.8rem;
+    margin-bottom: 1.5rem;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+.brand-title {
+    font-size: 1.8rem;
+    font-weight: 800;
+    background: linear-gradient(90deg, #7986cb, #64b5f6);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    letter-spacing: -0.5px;
+}
+.brand-sub {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.72rem;
+    color: #546e7a;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+}
+
+/* Metric cards */
+.metric-card {
+    background: #111827;
+    border: 1px solid #1e2a4a;
+    border-radius: 10px;
+    padding: 1rem 1.2rem;
+    text-align: center;
+}
+.metric-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.65rem;
+    color: #546e7a;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    margin-bottom: 0.3rem;
+}
+.metric-value {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 1.4rem;
+    font-weight: 600;
+    color: #7986cb;
+}
+.metric-value.positive { color: #66bb6a; }
+.metric-value.negative { color: #ef5350; }
+
+/* Fair value result box */
+.result-box {
+    background: linear-gradient(135deg, #1a237e22, #0d47a122);
+    border: 2px solid #3949ab;
+    border-radius: 14px;
+    padding: 2rem;
+    text-align: center;
+    margin-top: 1rem;
+}
+.result-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.75rem;
+    color: #7986cb;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    margin-bottom: 0.5rem;
+}
+.result-value {
+    font-size: 3rem;
+    font-weight: 800;
+    color: #e8eaf6;
+    line-height: 1;
+}
+.result-diff {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.9rem;
+    margin-top: 0.5rem;
+}
+
+/* Taylor terms */
+.taylor-box {
+    background: #0d1224;
+    border: 1px solid #1e2a4a;
+    border-radius: 10px;
+    padding: 1.2rem;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.8rem;
+}
+.taylor-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 0.3rem 0;
+    border-bottom: 1px solid #1e2a4a11;
+    color: #90a4ae;
+}
+.taylor-row .term { color: #7986cb; }
+.taylor-row .contrib { font-weight: 600; }
+.taylor-total {
+    display: flex;
+    justify-content: space-between;
+    padding: 0.5rem 0 0;
+    border-top: 1px solid #3949ab;
+    color: #e8eaf6;
+    font-weight: 600;
+}
+
+/* Buttons */
+.stButton > button {
+    background: linear-gradient(135deg, #3949ab, #1a237e) !important;
+    color: white !important;
+    border: none !important;
+    border-radius: 8px !important;
+    font-family: 'Syne', sans-serif !important;
+    font-weight: 600 !important;
+    letter-spacing: 0.5px !important;
+    padding: 0.5rem 1.5rem !important;
+    transition: all 0.2s !important;
+}
+.stButton > button:hover {
+    opacity: 0.85 !important;
+    transform: translateY(-1px) !important;
+}
+
+/* Inputs */
+.stTextInput input, .stNumberInput input, .stSelectbox select {
+    background: #111827 !important;
+    border: 1px solid #1e2a4a !important;
+    color: #e8eaf6 !important;
+    border-radius: 8px !important;
+    font-family: 'JetBrains Mono', monospace !important;
+}
+
+/* Info / warning boxes */
+.stAlert {
+    border-radius: 10px !important;
+}
+
+/* Section headers */
+.section-header {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.65rem;
+    color: #546e7a;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    border-bottom: 1px solid #1e2a4a;
+    padding-bottom: 0.4rem;
+    margin: 1.2rem 0 0.8rem;
+}
+</style>
+""", unsafe_allow_html=True)
+
+# ─── Session State Init ───────────────────────────────────────────────────────
+for key in ["groww", "authenticated", "greeks_data", "spot_ltp"]:
+    if key not in st.session_state:
+        st.session_state[key] = None
+if "authenticated" not in st.session_state:
+    st.session_state.authenticated = False
+
+# ─── Taylor Series Fair Value ────────────────────────────────────────────────
+def compute_fair_value(current_premium, delta, gamma, theta, vega,
+                        current_spot, target_spot, days_forward=0, iv_change=0.0):
+    """
+    Taylor Series expansion of option price around current spot:
+    P(S*) ≈ P(S) + Δ·ΔS + ½·Γ·ΔS² + θ·Δt + ν·Δσ
+    """
+    dS   = target_spot - current_spot            # spot move
+    dt   = days_forward / 365.0                  # time in years
+    d_iv = iv_change / 100.0                     # IV in decimal
+
+    delta_term = delta * dS
+    gamma_term = 0.5 * gamma * dS ** 2
+    theta_term = theta * days_forward            # theta already per-day
+    vega_term  = vega * d_iv
+
+    fair = current_premium + delta_term + gamma_term + theta_term + vega_term
+
+    breakdown = {
+        "Δ · ΔS  (Delta)":     delta_term,
+        "½Γ · ΔS²  (Gamma)":   gamma_term,
+        "θ · Δt  (Theta)":     theta_term,
+        "ν · Δσ  (Vega)":      vega_term,
+    }
+    return max(fair, 0.0), breakdown
+
+# ─── Sidebar: Authentication ─────────────────────────────────────────────────
+with st.sidebar:
+    st.markdown("### 🔐 Groww Login")
+    totp_token  = st.text_input("TOTP Token (API Key)", type="password",
+                                 help="From Groww Cloud API Keys page")
+    totp_secret = st.text_input("TOTP Secret", type="password",
+                                 help="Secret from your TOTP QR setup")
+
+    if st.button("Connect to Groww", use_container_width=True):
+        if not totp_token or not totp_secret:
+            st.error("Enter both TOTP Token and Secret.")
+        else:
+            with st.spinner("Authenticating…"):
+                try:
+                    totp_gen   = pyotp.TOTP(totp_secret)
+                    totp_code  = totp_gen.now()
+                    access_tok = GrowwAPI.get_access_token(
+                        api_key=totp_token, totp=totp_code
+                    )
+                    st.session_state.groww         = GrowwAPI(access_tok)
+                    st.session_state.authenticated = True
+                    st.success("✅ Connected!")
+                except Exception as e:
+                    st.error(f"Auth failed: {e}")
+
+    if st.session_state.authenticated:
+        st.markdown("---")
+        st.markdown(
+            "<span style='color:#66bb6a;font-size:0.8rem;'>● Live</span>",
+            unsafe_allow_html=True
+        )
+
+    st.markdown("---")
+    st.markdown(
+        "<div style='font-size:0.7rem;color:#37474f;'>"
+        "Options involve risk. This tool is for educational purposes only. "
+        "Not financial advice.</div>",
+        unsafe_allow_html=True
+    )
+
+# ─── Brand Bar ───────────────────────────────────────────────────────────────
+st.markdown("""
+<div class='brand-bar'>
+    <div>
+        <div class='brand-title'>OptionsSense</div>
+        <div class='brand-sub'>Fair Value Calculator · Taylor Series · Groww API</div>
+    </div>
+</div>
+""", unsafe_allow_html=True)
+
+if not st.session_state.authenticated:
+    st.info("👈 Connect your Groww account from the sidebar to get started.")
+    with st.expander("ℹ️ How it works"):
+        st.markdown("""
+**Step 1 – Authenticate**
+- Go to [Groww Cloud API Keys](https://groww.in/trade-api/api-keys)
+- Generate a **TOTP token** (not the API key)
+- Copy both the **TOTP Token** and **TOTP Secret**
+- Paste them in the sidebar and click *Connect to Groww*
+
+**Step 2 – Fetch Greeks**
+- Select underlying (NIFTY / BANKNIFTY / SENSEX etc.)
+- Choose expiry date and strike price
+- Select CE or PE
+- Click *Fetch Greeks & LTP*
+
+**Step 3 – Calculate Fair Value**
+- Enter your **target spot price** scenario
+- Optionally adjust days-forward and IV change
+- Click *Calculate Fair Value*
+
+**Taylor Series formula used:**
+```
+P(S*) ≈ P(S) + Δ·ΔS + ½·Γ·ΔS² + θ·Δt + ν·Δσ
+```
+        """)
+    st.stop()
+
+# ─── Main UI ─────────────────────────────────────────────────────────────────
+groww = st.session_state.groww
+
+col_inp, col_result = st.columns([1, 1.3], gap="large")
+
+with col_inp:
+    st.markdown("<div class='section-header'>Instrument Selection</div>",
+                unsafe_allow_html=True)
+
+    underlying = st.selectbox(
+        "Underlying",
+        ["NIFTY", "BANKNIFTY", "FINNIFTY", "MIDCPNIFTY", "SENSEX", "BANKEX"],
+    )
+
+    expiry_date = st.date_input(
+        "Expiry Date",
+        value=date.today() + timedelta(days=7),
+        min_value=date.today(),
+    )
+
+    strike_price = st.number_input(
+        "Strike Price", min_value=1, step=50, value=24000
+    )
+
+    option_type = st.selectbox("Option Type", ["CE", "PUT → PE"],
+                                index=0)
+    opt_suffix = "CE" if "CE" in option_type else "PE"
+
+    # Build trading symbol  e.g. NIFTY25APR1124000CE
+    expiry_str = expiry_date.strftime("%y%b%d").upper()
+    trading_symbol = f"{underlying}{expiry_str}{int(strike_price)}{opt_suffix}"
+    st.markdown(
+        f"<div style='font-family:JetBrains Mono,monospace;font-size:0.8rem;"
+        f"color:#7986cb;margin-top:0.3rem;'>Symbol: {trading_symbol}</div>",
+        unsafe_allow_html=True,
+    )
+
+    # Exchange selector
+    exchange_map = {
+        "NSE": "NSE",
+        "BSE": "BSE",
+    }
+    exchange = "BSE" if underlying in ["SENSEX", "BANKEX"] else "NSE"
+
+    fetch_clicked = st.button("📡 Fetch Greeks & LTP", use_container_width=True)
+
+    if fetch_clicked:
+        with st.spinner("Fetching data from Groww…"):
+            try:
+                # Fetch Greeks
+                greeks_resp = groww.get_greeks(
+                    exchange=exchange,
+                    underlying=underlying,
+                    trading_symbol=trading_symbol,
+                    expiry=expiry_date.strftime("%Y-%m-%d"),
+                )
+
+                # Fetch spot LTP for underlying index
+                ltp_resp = groww.get_ltp(
+                    segment=groww.SEGMENT_CASH,
+                    exchange_trading_symbols=f"{exchange}_{underlying}",
+                )
+
+                # Fetch option LTP
+                opt_ltp_resp = groww.get_ltp(
+                    segment=groww.SEGMENT_FNO,
+                    exchange_trading_symbols=f"{exchange}_{trading_symbol}",
+                )
+
+                st.session_state.greeks_data = greeks_resp
+                spot_key = f"{exchange}_{underlying}"
+                opt_key  = f"{exchange}_{trading_symbol}"
+
+                st.session_state.spot_ltp   = ltp_resp.get(spot_key, 0)
+                st.session_state.option_ltp = opt_ltp_resp.get(opt_key, 0)
+                st.session_state.trading_symbol = trading_symbol
+                st.session_state.underlying = underlying
+                st.success("✅ Data fetched successfully!")
+
+            except Exception as e:
+                st.error(f"Error: {e}")
+                st.code(traceback.format_exc(), language="python")
+
+    # ── Greeks Display ──────────────────────────────────────────────────────
+    if st.session_state.greeks_data:
+        gd = st.session_state.greeks_data
+
+        st.markdown("<div class='section-header'>Live Greeks</div>",
+                    unsafe_allow_html=True)
+
+        # Safely extract values
+        delta = float(gd.get("delta", 0) or 0)
+        gamma = float(gd.get("gamma", 0) or 0)
+        theta = float(gd.get("theta", 0) or 0)
+        vega  = float(gd.get("vega",  0) or 0)
+        iv    = float(gd.get("implied_volatility", 0) or 0)
+        spot  = float(st.session_state.spot_ltp or 0)
+        opt_p = float(st.session_state.option_ltp or 0)
+
+        g1, g2, g3 = st.columns(3)
+        with g1:
+            st.markdown(
+                f"<div class='metric-card'><div class='metric-label'>Delta</div>"
+                f"<div class='metric-value'>{delta:.4f}</div></div>",
+                unsafe_allow_html=True)
+        with g2:
+            st.markdown(
+                f"<div class='metric-card'><div class='metric-label'>Gamma</div>"
+                f"<div class='metric-value'>{gamma:.6f}</div></div>",
+                unsafe_allow_html=True)
+        with g3:
+            st.markdown(
+                f"<div class='metric-card'><div class='metric-label'>Theta / day</div>"
+                f"<div class='metric-value negative'>{theta:.4f}</div></div>",
+                unsafe_allow_html=True)
+
+        g4, g5, g6 = st.columns(3)
+        with g4:
+            st.markdown(
+                f"<div class='metric-card'><div class='metric-label'>Vega</div>"
+                f"<div class='metric-value'>{vega:.4f}</div></div>",
+                unsafe_allow_html=True)
+        with g5:
+            st.markdown(
+                f"<div class='metric-card'><div class='metric-label'>IV (%)</div>"
+                f"<div class='metric-value'>{iv*100:.2f}%</div></div>",
+                unsafe_allow_html=True)
+        with g6:
+            st.markdown(
+                f"<div class='metric-card'><div class='metric-label'>Option LTP</div>"
+                f"<div class='metric-value'>₹{opt_p:.2f}</div></div>",
+                unsafe_allow_html=True)
+
+        st.markdown(
+            f"<div style='margin-top:0.8rem;font-family:JetBrains Mono,monospace;"
+            f"font-size:0.8rem;color:#546e7a;'>Spot ({underlying}): "
+            f"<span style='color:#e8eaf6;font-weight:600;'>₹{spot:,.2f}</span></div>",
+            unsafe_allow_html=True)
+
+# ─── Right Column: Fair Value Calculator ─────────────────────────────────────
+with col_result:
+    st.markdown("<div class='section-header'>Taylor Series Fair Value</div>",
+                unsafe_allow_html=True)
+
+    if not st.session_state.greeks_data:
+        st.info("Fetch Greeks first using the panel on the left.")
+    else:
+        gd    = st.session_state.greeks_data
+        delta = float(gd.get("delta", 0) or 0)
+        gamma = float(gd.get("gamma", 0) or 0)
+        theta = float(gd.get("theta", 0) or 0)
+        vega  = float(gd.get("vega",  0) or 0)
+        spot  = float(st.session_state.spot_ltp or 0)
+        opt_p = float(st.session_state.option_ltp or 0)
+
+        target_spot = st.number_input(
+            "🎯 Target Spot Price",
+            value=float(spot),
+            step=50.0,
+            help="Enter the spot price scenario you want to evaluate.",
+        )
+
+        c1, c2 = st.columns(2)
+        with c1:
+            days_fwd = st.number_input(
+                "Days Forward (Θ decay)",
+                min_value=0, max_value=90, value=0, step=1,
+                help="Number of calendar days ahead (for theta decay).",
+            )
+        with c2:
+            iv_change = st.number_input(
+                "IV Change (%)",
+                min_value=-50.0, max_value=50.0, value=0.0, step=0.5,
+                help="Expected absolute change in implied volatility in %.",
+            )
+
+        calc_clicked = st.button("⚡ Calculate Fair Value", use_container_width=True)
+
+        if calc_clicked or True:  # show live preview
+            fair_val, breakdown = compute_fair_value(
+                current_premium=opt_p,
+                delta=delta, gamma=gamma, theta=theta, vega=vega,
+                current_spot=spot, target_spot=target_spot,
+                days_forward=days_fwd, iv_change=iv_change,
+            )
+
+            diff     = fair_val - opt_p
+            diff_pct = (diff / opt_p * 100) if opt_p else 0
+            diff_cls = "positive" if diff >= 0 else "negative"
+            diff_sym = "▲" if diff >= 0 else "▼"
+
+            st.markdown(f"""
+<div class='result-box'>
+    <div class='result-label'>Estimated Fair Premium</div>
+    <div class='result-value'>₹{fair_val:,.2f}</div>
+    <div class='result-diff' style='color:{"#66bb6a" if diff>=0 else "#ef5350"}'>
+        {diff_sym} {abs(diff):.2f} ({abs(diff_pct):.1f}%) from current ₹{opt_p:.2f}
+    </div>
+</div>
+""", unsafe_allow_html=True)
+
+            st.markdown("<div class='section-header' style='margin-top:1.4rem;'>"
+                        "Taylor Series Breakdown</div>", unsafe_allow_html=True)
+
+            st.markdown(f"""
+<div class='taylor-box'>
+    <div class='taylor-row'>
+        <span>Current Premium P(S)</span>
+        <span class='contrib'>₹{opt_p:.4f}</span>
+    </div>""", unsafe_allow_html=True)
+
+            for term_name, val in breakdown.items():
+                color = "#66bb6a" if val >= 0 else "#ef5350"
+                st.markdown(
+                    f"<div class='taylor-row'>"
+                    f"<span class='term'>{term_name}</span>"
+                    f"<span class='contrib' style='color:{color};'>"
+                    f"{'+'if val>=0 else ''}₹{val:.4f}</span></div>",
+                    unsafe_allow_html=True)
+
+            st.markdown(
+                f"<div class='taylor-total'>"
+                f"<span>Fair Value P(S*)</span>"
+                f"<span>₹{fair_val:.4f}</span>"
+                f"</div></div>",
+                unsafe_allow_html=True)
+
+            # ── Interpretation ──────────────────────────────────────────────
+            st.markdown("<div class='section-header'>Signal</div>",
+                        unsafe_allow_html=True)
+
+            dS = target_spot - spot
+            if abs(dS) < 1:
+                signal_text = "Spot unchanged. Only Theta & Vega effects dominate."
+                signal_icon = "⏸"
+                signal_color = "#ffa726"
+            elif fair_val > opt_p * 1.05:
+                signal_text = (f"At ₹{target_spot:,.0f} spot, the option may be worth "
+                               f"~{diff_pct:.1f}% more. Bullish scenario for this leg.")
+                signal_icon = "🚀"
+                signal_color = "#66bb6a"
+            elif fair_val < opt_p * 0.95:
+                signal_text = (f"At ₹{target_spot:,.0f} spot, the option loses "
+                               f"~{abs(diff_pct):.1f}%. Adverse move for this position.")
+                signal_icon = "⚠️"
+                signal_color = "#ef5350"
+            else:
+                signal_text = "Marginal change. Premium relatively stable at this target."
+                signal_icon = "↔️"
+                signal_color = "#90a4ae"
+
+            st.markdown(
+                f"<div style='background:#0d1224;border:1px solid #1e2a4a;"
+                f"border-left:3px solid {signal_color};border-radius:8px;"
+                f"padding:0.9rem 1.2rem;font-size:0.9rem;'>"
+                f"{signal_icon} {signal_text}</div>",
+                unsafe_allow_html=True)
+
+            # ── Assumptions reminder ─────────────────────────────────────────
+            with st.expander("📐 Formula & Assumptions"):
+                st.markdown(r"""
+**Taylor Series Expansion (2nd order):**
+$$P(S^*) \approx P(S) + \Delta \cdot \Delta S + \frac{1}{2} \Gamma \cdot (\Delta S)^2 + \Theta \cdot \Delta t + \nu \cdot \Delta\sigma$$
+
+| Symbol | Greek | Meaning |
+|--------|-------|---------|
+| Δ | Delta | Rate of change w.r.t. spot |
+| Γ | Gamma | Convexity / 2nd-order spot |
+| Θ | Theta | Time decay (per day) |
+| ν | Vega  | Sensitivity to IV change |
+
+**Assumptions:**
+- Greeks are assumed constant over the move (local approximation)
+- For large moves, higher-order terms (e.g., Vanna, Volga) add accuracy
+- Theta uses calendar days; markets close on weekends
+- IV change is an independent user input (not forecasted)
+                """)

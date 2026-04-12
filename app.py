@@ -56,9 +56,30 @@ html, body, [class*="css"] {
 .brand-sub {
     font-family: 'JetBrains Mono', monospace;
     font-size: 0.72rem;
-    color: #546e7a;
+    color: #90a4ae;
     letter-spacing: 2px;
     text-transform: uppercase;
+}
+
+/* Streamlit native widget labels */
+label,
+[data-testid="stWidgetLabel"] p,
+[data-testid="stWidgetLabel"] {
+    color: #c5cae9 !important;
+    font-family: 'Syne', sans-serif !important;
+    font-size: 0.9rem !important;
+    font-weight: 600 !important;
+}
+
+/* Sidebar widget labels */
+[data-testid="stSidebar"] label,
+[data-testid="stSidebar"] [data-testid="stWidgetLabel"] p {
+    color: #c5cae9 !important;
+    font-weight: 600 !important;
+}
+
+[data-testid="stSidebar"] h3 {
+    color: #e8eaf6 !important;
 }
 
 /* Metric cards */
@@ -72,7 +93,7 @@ html, body, [class*="css"] {
 .metric-label {
     font-family: 'JetBrains Mono', monospace;
     font-size: 0.65rem;
-    color: #546e7a;
+    color: #90a4ae;
     text-transform: uppercase;
     letter-spacing: 1.5px;
     margin-bottom: 0.3rem;
@@ -177,7 +198,7 @@ html, body, [class*="css"] {
 .section-header {
     font-family: 'JetBrains Mono', monospace;
     font-size: 0.65rem;
-    color: #546e7a;
+    color: #90a4ae;
     letter-spacing: 2px;
     text-transform: uppercase;
     border-bottom: 1px solid #1e2a4a;
@@ -326,8 +347,7 @@ with col_inp:
                                 index=0)
     opt_suffix = "CE" if "CE" in option_type else "PE"
 
-    # Build trading symbol  e.g. NIFTY25APR1124000CE
-    #expiry_str = expiry_date.strftime("%y%b%d").upper()
+    # Build trading symbol  e.g. NIFTY2541124000CE  → {YY}{M}{DD} where M is non-padded month number
     expiry_str = expiry_date.strftime("%y") + str(expiry_date.month) + expiry_date.strftime("%d")
     trading_symbol = f"{underlying}{expiry_str}{int(strike_price)}{opt_suffix}"
     st.markdown(

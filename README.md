@@ -1,6 +1,6 @@
 # OptionsSense — Options Fair Value Calculator
 
-A Streamlit app that connects to your **Groww broker account** via API, fetches live Option Greeks, and calculates the **fair premium value** using a **Taylor Series Expansion** of the Black-Scholes option pricing model.
+Lakshman Rahul has created a Streamlit app that connects to your **Groww broker account** via API, fetches live Option Greeks, and calculates the **fair premium value** using a **Taylor Series Expansion** of the Black-Scholes option pricing model.
 
 ---
 

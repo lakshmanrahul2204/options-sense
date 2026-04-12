@@ -327,7 +327,8 @@ with col_inp:
     opt_suffix = "CE" if "CE" in option_type else "PE"
 
     # Build trading symbol  e.g. NIFTY25APR1124000CE
-    expiry_str = expiry_date.strftime("%y%b%d").upper()
+    #expiry_str = expiry_date.strftime("%y%b%d").upper()
+    expiry_str = expiry_date.strftime("%y") + str(expiry_date.month) + expiry_date.strftime("%d")
     trading_symbol = f"{underlying}{expiry_str}{int(strike_price)}{opt_suffix}"
     st.markdown(
         f"<div style='font-family:JetBrains Mono,monospace;font-size:0.8rem;"

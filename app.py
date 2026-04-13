@@ -368,35 +368,51 @@ with col_inp:
     if fetch_clicked:
         with st.spinner("Fetching data from Groww…"):
             try:
-                # Fetch Greeks
-                greeks_resp = groww.get_greeks(
+                # Single call: get_option_chain returns underlying_ltp, greeks,
+                # option LTP and OI for every strike in one response
+                chain_resp = groww.get_option_chain(
                     exchange=exchange,
                     underlying=underlying,
-                    trading_symbol=trading_symbol,
-                    expiry=expiry_date.strftime("%Y-%m-%d"),
+                    expiry_date=expiry_date.strftime("%Y-%m-%d"),
                 )
 
-                # Fetch spot LTP for underlying index
-                ltp_resp = groww.get_ltp(
-                    segment=groww.SEGMENT_CASH,
-                    exchange_trading_symbols=f"{exchange}_{underlying}",
+                # ── Spot LTP comes free at the top level ──────────────────
+                st.session_state.spot_ltp = float(
+                    chain_resp.get("underlying_ltp", 0) or 0
                 )
 
-                # Fetch option LTP
-                opt_ltp_resp = groww.get_ltp(
-                    segment=groww.SEGMENT_FNO,
-                    exchange_trading_symbols=f"{exchange}_{trading_symbol}",
-                )
+                # ── Drill into strikes → selected strike → CE or PE ───────
+                strike_key = str(int(strike_price))
+                strikes    = chain_resp.get("strikes", {})
 
-                st.session_state.greeks_data = greeks_resp
-                spot_key = f"{exchange}_{underlying}"
-                opt_key  = f"{exchange}_{trading_symbol}"
+                if strike_key not in strikes:
+                    available = sorted(
+                        strikes.keys(),
+                        key=lambda x: abs(int(x) - int(strike_price))
+                    )[:5]
+                    st.error(
+                        f"Strike {strike_key} not found in option chain. "
+                        f"Nearest available: {', '.join(available)}"
+                    )
+                else:
+                    leg        = strikes[strike_key].get(opt_suffix, {})
+                    raw_greeks = leg.get("greeks", {})
 
-                st.session_state.spot_ltp   = ltp_resp.get(spot_key, 0)
-                st.session_state.option_ltp = opt_ltp_resp.get(opt_key, 0)
-                st.session_state.trading_symbol = trading_symbol
-                st.session_state.underlying = underlying
-                st.success("✅ Data fetched successfully!")
+                    # Normalise into a flat dict the rest of the app expects.
+                    # iv from the API is already in % (e.g. 14.5), stored as-is.
+                    st.session_state.greeks_data = {
+                        "delta":              raw_greeks.get("delta", 0),
+                        "gamma":              raw_greeks.get("gamma", 0),
+                        "theta":              raw_greeks.get("theta", 0),
+                        "vega":               raw_greeks.get("vega",  0),
+                        "rho":                raw_greeks.get("rho",   0),
+                        "implied_volatility": raw_greeks.get("iv",    0),
+                    }
+
+                    st.session_state.option_ltp     = float(leg.get("ltp", 0) or 0)
+                    st.session_state.trading_symbol = leg.get("trading_symbol", trading_symbol)
+                    st.session_state.underlying     = underlying
+                    st.success("✅ Data fetched successfully!")
 
             except Exception as e:
                 st.error(f"Error: {e}")
@@ -414,7 +430,7 @@ with col_inp:
         gamma = float(gd.get("gamma", 0) or 0)
         theta = float(gd.get("theta", 0) or 0)
         vega  = float(gd.get("vega",  0) or 0)
-        iv    = float(gd.get("implied_volatility", 0) or 0)
+        iv    = float(gd.get("implied_volatility", 0) or 0)  # already in %
         spot  = float(st.session_state.spot_ltp or 0)
         opt_p = float(st.session_state.option_ltp or 0)
 
@@ -444,7 +460,7 @@ with col_inp:
         with g5:
             st.markdown(
                 f"<div class='metric-card'><div class='metric-label'>IV (%)</div>"
-                f"<div class='metric-value'>{iv*100:.2f}%</div></div>",
+                f"<div class='metric-value'>{iv:.2f}%</div></div>",
                 unsafe_allow_html=True)
         with g6:
             st.markdown(

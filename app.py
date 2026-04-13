@@ -23,18 +23,48 @@ html, body, [class*="css"] {
     font-family: 'Syne', sans-serif;
 }
 
+/* ── Hide Streamlit's white top toolbar/header ───────────────────────────── */
+[data-testid="stHeader"] {
+    display: none !important;
+}
+
+/* Remove the gap Streamlit reserves for the hidden header */
+.stApp > header { display: none !important; }
+.block-container {
+    padding-top: 1.5rem !important;
+}
+
 .stApp {
     background: #0a0e1a;
     color: #e8eaf6;
 }
 
-/* Sidebar */
+/* ── Sidebar ─────────────────────────────────────────────────────────────── */
 [data-testid="stSidebar"] {
     background: #0d1224 !important;
     border-right: 1px solid #1e2a4a;
 }
 
-/* Top brand bar */
+/* Sidebar collapse/expand arrow — make it visible on dark background */
+[data-testid="stSidebarCollapseButton"] button,
+[data-testid="collapsedControl"] button {
+    background: #1e2a4a !important;
+    border: 1px solid #3949ab !important;
+    border-radius: 50% !important;
+    color: #c5cae9 !important;
+}
+[data-testid="stSidebarCollapseButton"] button:hover,
+[data-testid="collapsedControl"] button:hover {
+    background: #3949ab !important;
+    color: #ffffff !important;
+}
+[data-testid="stSidebarCollapseButton"] svg,
+[data-testid="collapsedControl"] svg {
+    fill: #c5cae9 !important;
+    stroke: #c5cae9 !important;
+}
+
+/* ── Top brand bar ───────────────────────────────────────────────────────── */
 .brand-bar {
     background: linear-gradient(135deg, #1a237e 0%, #0d1224 100%);
     border: 1px solid #283593;
@@ -61,7 +91,7 @@ html, body, [class*="css"] {
     text-transform: uppercase;
 }
 
-/* Streamlit native widget labels */
+/* ── Streamlit native widget labels ──────────────────────────────────────── */
 label,
 [data-testid="stWidgetLabel"] p,
 [data-testid="stWidgetLabel"] {
@@ -71,7 +101,6 @@ label,
     font-weight: 600 !important;
 }
 
-/* Sidebar widget labels */
 [data-testid="stSidebar"] label,
 [data-testid="stSidebar"] [data-testid="stWidgetLabel"] p {
     color: #c5cae9 !important;
@@ -82,7 +111,7 @@ label,
     color: #e8eaf6 !important;
 }
 
-/* Metric cards */
+/* ── Metric cards ────────────────────────────────────────────────────────── */
 .metric-card {
     background: #111827;
     border: 1px solid #1e2a4a;
@@ -107,7 +136,7 @@ label,
 .metric-value.positive { color: #66bb6a; }
 .metric-value.negative { color: #ef5350; }
 
-/* Fair value result box */
+/* ── Fair value result box ───────────────────────────────────────────────── */
 .result-box {
     background: linear-gradient(135deg, #1a237e22, #0d47a122);
     border: 2px solid #3949ab;
@@ -136,7 +165,7 @@ label,
     margin-top: 0.5rem;
 }
 
-/* Taylor terms */
+/* ── Taylor terms ────────────────────────────────────────────────────────── */
 .taylor-box {
     background: #0d1224;
     border: 1px solid #1e2a4a;
@@ -163,7 +192,7 @@ label,
     font-weight: 600;
 }
 
-/* Buttons */
+/* ── Buttons ─────────────────────────────────────────────────────────────── */
 .stButton > button {
     background: linear-gradient(135deg, #3949ab, #1a237e) !important;
     color: white !important;
@@ -180,7 +209,7 @@ label,
     transform: translateY(-1px) !important;
 }
 
-/* Inputs */
+/* ── Inputs ──────────────────────────────────────────────────────────────── */
 .stTextInput input, .stNumberInput input, .stSelectbox select {
     background: #111827 !important;
     border: 1px solid #1e2a4a !important;
@@ -189,12 +218,12 @@ label,
     font-family: 'JetBrains Mono', monospace !important;
 }
 
-/* Info / warning boxes */
+/* ── Info / warning boxes ────────────────────────────────────────────────── */
 .stAlert {
     border-radius: 10px !important;
 }
 
-/* Section headers */
+/* ── Section headers ─────────────────────────────────────────────────────── */
 .section-header {
     font-family: 'JetBrains Mono', monospace;
     font-size: 0.65rem;
@@ -207,6 +236,7 @@ label,
 }
 </style>
 """, unsafe_allow_html=True)
+
 
 # ─── Session State Init ───────────────────────────────────────────────────────
 for key in ["groww", "authenticated", "greeks_data", "spot_ltp"]:

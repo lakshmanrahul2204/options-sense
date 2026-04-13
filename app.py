@@ -45,23 +45,14 @@ html, body, [class*="css"] {
     border-right: 1px solid #1e2a4a;
 }
 
-/* Sidebar collapse/expand arrow — make it visible on dark background */
-[data-testid="stSidebarCollapseButton"] button,
-[data-testid="collapsedControl"] button {
-    background: #1e2a4a !important;
-    border: 1px solid #3949ab !important;
-    border-radius: 50% !important;
-    color: #c5cae9 !important;
-}
-[data-testid="stSidebarCollapseButton"] button:hover,
-[data-testid="collapsedControl"] button:hover {
-    background: #3949ab !important;
+/* Sidebar collapse/expand arrow — force white */
+[data-testid="stSidebarCollapseButton"],
+[data-testid="stSidebarCollapseButton"] *,
+[data-testid="collapsedControl"],
+[data-testid="collapsedControl"] * {
     color: #ffffff !important;
-}
-[data-testid="stSidebarCollapseButton"] svg,
-[data-testid="collapsedControl"] svg {
-    fill: #c5cae9 !important;
-    stroke: #c5cae9 !important;
+    fill: #ffffff !important;
+    stroke: #ffffff !important;
 }
 
 /* ── Top brand bar ───────────────────────────────────────────────────────── */
@@ -642,3 +633,4 @@ $$P(S^*) \approx P(S) + \Delta \cdot \Delta S + \frac{1}{2} \Gamma \cdot (\Delta
 - Theta uses calendar days; markets close on weekends
 - IV change is an independent user input (not forecasted)
                 """)
+                

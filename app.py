@@ -1,5 +1,4 @@
 import streamlit as st
-import pyotp
 import pandas as pd
 import numpy as np
 from growwapi import GrowwAPI
@@ -214,7 +213,46 @@ label,
     border-radius: 10px !important;
 }
 
-/* ── Section headers ─────────────────────────────────────────────────────── */
+/* ── Mobile: hide sidebar entirely, we use inline login card ────────────── */
+@media (max-width: 768px) {
+    [data-testid="stSidebar"],
+    [data-testid="stSidebarCollapseButton"],
+    [data-testid="collapsedControl"] {
+        display: none !important;
+    }
+    .block-container {
+        padding-left: 1rem !important;
+        padding-right: 1rem !important;
+    }
+}
+
+/* ── Login card (inline, shown on all screen sizes) ──────────────────────── */
+.login-card {
+    background: #0d1224;
+    border: 1px solid #1e2a4a;
+    border-radius: 12px;
+    padding: 1.2rem 1.5rem;
+    margin-bottom: 1.2rem;
+}
+.login-card-connected {
+    background: #0a1a0f;
+    border: 1px solid #1b5e20;
+    border-radius: 12px;
+    padding: 0.8rem 1.5rem;
+    margin-bottom: 1.2rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+.connected-badge {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.8rem;
+    color: #66bb6a;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
 .section-header {
     font-family: 'JetBrains Mono', monospace;
     font-size: 0.65rem;
@@ -230,7 +268,7 @@ label,
 
 
 # ─── Session State Init ───────────────────────────────────────────────────────
-for key in ["groww", "authenticated", "greeks_data", "spot_ltp"]:
+for key in ["groww", "greeks_data", "spot_ltp", "option_ltp", "trading_symbol", "underlying"]:
     if key not in st.session_state:
         st.session_state[key] = None
 if "authenticated" not in st.session_state:
@@ -243,13 +281,13 @@ def compute_fair_value(current_premium, delta, gamma, theta, vega,
     Taylor Series expansion of option price around current spot:
     P(S*) ≈ P(S) + Δ·ΔS + ½·Γ·ΔS² + θ·Δt + ν·Δσ
     """
-    dS   = target_spot - current_spot            # spot move
-    dt   = days_forward / 365.0                  # time in years
-    d_iv = iv_change / 100.0                     # IV in decimal
+    dS   = target_spot - current_spot
+    dt   = days_forward / 365.0
+    d_iv = iv_change / 100.0
 
     delta_term = delta * dS
     gamma_term = 0.5 * gamma * dS ** 2
-    theta_term = theta * days_forward            # theta already per-day
+    theta_term = theta * days_forward
     vega_term  = vega * d_iv
 
     fair = current_premium + delta_term + gamma_term + theta_term + vega_term
@@ -262,46 +300,6 @@ def compute_fair_value(current_premium, delta, gamma, theta, vega,
     }
     return max(fair, 0.0), breakdown
 
-# ─── Sidebar: Authentication ─────────────────────────────────────────────────
-with st.sidebar:
-    st.markdown("### 🔐 Groww Login")
-    totp_token  = st.text_input("TOTP Token (API Key)", type="password",
-                                 help="From Groww Cloud API Keys page")
-    totp_secret = st.text_input("TOTP Secret", type="password",
-                                 help="Secret from your TOTP QR setup")
-
-    if st.button("Connect to Groww", use_container_width=True):
-        if not totp_token or not totp_secret:
-            st.error("Enter both TOTP Token and Secret.")
-        else:
-            with st.spinner("Authenticating…"):
-                try:
-                    totp_gen   = pyotp.TOTP(totp_secret)
-                    totp_code  = totp_gen.now()
-                    access_tok = GrowwAPI.get_access_token(
-                        api_key=totp_token, totp=totp_code
-                    )
-                    st.session_state.groww         = GrowwAPI(access_tok)
-                    st.session_state.authenticated = True
-                    st.success("✅ Connected!")
-                except Exception as e:
-                    st.error(f"Auth failed: {e}")
-
-    if st.session_state.authenticated:
-        st.markdown("---")
-        st.markdown(
-            "<span style='color:#66bb6a;font-size:0.8rem;'>● Live</span>",
-            unsafe_allow_html=True
-        )
-
-    st.markdown("---")
-    st.markdown(
-        "<div style='font-size:0.7rem;color:#37474f;'>"
-        "Options involve risk. This tool is for educational purposes only. "
-        "Not financial advice.</div>",
-        unsafe_allow_html=True
-    )
-
 # ─── Brand Bar ───────────────────────────────────────────────────────────────
 st.markdown("""
 <div class='brand-bar'>
@@ -312,33 +310,72 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
+# ─── Inline Login / Status Card ──────────────────────────────────────────────
 if not st.session_state.authenticated:
-    st.info("👈 Connect your Groww account from the sidebar to get started.")
+    st.markdown("<div class='login-card'>", unsafe_allow_html=True)
+    st.markdown("#### 🔐 Connect to Groww")
+    st.caption("Enter your Groww API credentials. Get them from [groww.in/trade-api/api-keys](https://groww.in/trade-api/api-keys).")
+
+    lc1, lc2 = st.columns(2)
+    with lc1:
+        api_key = st.text_input("API Key", type="password",
+                                 placeholder="Your Groww API Key",
+                                 help="From Groww Cloud API Keys page")
+    with lc2:
+        api_secret = st.text_input("API Secret", type="password",
+                                    placeholder="Your Groww API Secret",
+                                    help="Secret shown alongside the API Key")
+
+    if st.button("Connect to Groww →", use_container_width=True):
+        if not api_key or not api_secret:
+            st.error("Please enter both API Key and API Secret.")
+        else:
+            with st.spinner("Authenticating…"):
+                try:
+                    access_token = GrowwAPI.get_access_token(
+                        api_key=api_key,
+                        secret=api_secret,
+                    )
+                    st.session_state.groww         = GrowwAPI(access_token)
+                    st.session_state.authenticated = True
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Authentication failed: {e}")
+
+    st.markdown("</div>", unsafe_allow_html=True)
+
     with st.expander("ℹ️ How it works"):
         st.markdown("""
 **Step 1 – Authenticate**
 - Go to [Groww Cloud API Keys](https://groww.in/trade-api/api-keys)
-- Generate a **TOTP token** (not the API key)
-- Copy both the **TOTP Token** and **TOTP Secret**
-- Paste them in the sidebar and click *Connect to Groww*
+- Generate an **API Key** and copy the **API Key** + **API Secret**
+- Paste them above and click *Connect to Groww*
 
 **Step 2 – Fetch Greeks**
-- Select underlying (NIFTY / BANKNIFTY / SENSEX etc.)
-- Choose expiry date and strike price
-- Select CE or PE
+- Select underlying, expiry, strike, and option type
 - Click *Fetch Greeks & LTP*
 
 **Step 3 – Calculate Fair Value**
-- Enter your **target spot price** scenario
-- Optionally adjust days-forward and IV change
-- Click *Calculate Fair Value*
-
-**Taylor Series formula used:**
 ```
 P(S*) ≈ P(S) + Δ·ΔS + ½·Γ·ΔS² + θ·Δt + ν·Δσ
 ```
         """)
     st.stop()
+
+else:
+    # Connected status bar
+    st.markdown(
+        "<div class='login-card-connected'>"
+        "<div class='connected-badge'>● Connected to Groww</div>"
+        "</div>",
+        unsafe_allow_html=True
+    )
+    if st.button("Disconnect", type="secondary"):
+        for key in ["groww", "authenticated", "greeks_data", "spot_ltp",
+                    "option_ltp", "trading_symbol", "underlying"]:
+            st.session_state[key] = None
+        st.session_state.authenticated = False
+        st.rerun()
 
 # ─── Main UI ─────────────────────────────────────────────────────────────────
 groww = st.session_state.groww
@@ -633,4 +670,3 @@ $$P(S^*) \approx P(S) + \Delta \cdot \Delta S + \frac{1}{2} \Gamma \cdot (\Delta
 - Theta uses calendar days; markets close on weekends
 - IV change is an independent user input (not forecasted)
                 """)
-                
